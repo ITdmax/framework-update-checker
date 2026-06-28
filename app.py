@@ -321,11 +321,13 @@ class App:
         self.ready[kind] = entry
 
     def _maybe_announce(self, kind, entry, ident, manual):
-        """Notify once per new version (not on every check). A manual check always
-        notifies so the user gets feedback."""
+        """Notify when there's something the user hasn't handled yet. Once an
+        update is installed/marked (actioned), it never re-notifies -- not even
+        on a manual check. Otherwise: a manual check shows pending updates, and a
+        scheduled check notifies only the first time a new version appears."""
         announced = self.cfg["state"].get("announced", {})
         newly = announced.get(kind) != ident
-        if manual or (newly and self._unacted(kind, ident)):
+        if self._unacted(kind, ident) and (manual or newly):
             self._announce(kind, entry)
         if newly:
             a = dict(announced)
