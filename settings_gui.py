@@ -78,6 +78,31 @@ def main():
     )
     row += 1
 
+    ttk.Label(frm, text="App self-update (from GitHub):").grid(row=row, column=0, sticky="w", **pad)
+    row += 1
+
+    ttk.Label(frm, text="GitHub repo (owner/name)").grid(row=row, column=0, sticky="w", **pad)
+    repo_var = tk.StringVar(value=cfg.get("app_repo", ""))
+    ttk.Entry(frm, textvariable=repo_var, width=40).grid(row=row, column=1, sticky="w", **pad)
+    row += 1
+
+    autoupd_var = tk.BooleanVar(value=cfg.get("auto_update", True))
+    ttk.Checkbutton(
+        frm, text="Check GitHub for new versions of this app", variable=autoupd_var
+    ).grid(row=row, column=0, columnspan=2, sticky="w", **pad)
+    row += 1
+
+    silentupd_var = tk.BooleanVar(value=cfg.get("auto_install_app_updates", False))
+    ttk.Checkbutton(
+        frm, text="Install app updates silently (no prompt)", variable=silentupd_var
+    ).grid(row=row, column=0, columnspan=2, sticky="w", **pad)
+    row += 1
+
+    ttk.Separator(frm, orient="horizontal").grid(
+        row=row, column=0, columnspan=2, sticky="ew", pady=8
+    )
+    row += 1
+
     ttk.Label(frm, text="Advanced: forum search URL").grid(row=row, column=0, sticky="w", **pad)
     search_var = tk.StringVar(value=cfg["sources"].get("community_search_url", ""))
     ttk.Entry(frm, textvariable=search_var, width=54).grid(row=row, column=1, sticky="w", **pad)
@@ -100,6 +125,9 @@ def main():
         cfg["watch_drivers"] = bool(drivers_var.get())
         cfg["watch_keyboard"] = bool(keyboard_var.get())
         cfg["notify_when_up_to_date"] = bool(uptodate_var.get())
+        cfg["app_repo"] = repo_var.get().strip()
+        cfg["auto_update"] = bool(autoupd_var.get())
+        cfg["auto_install_app_updates"] = bool(silentupd_var.get())
         cfg["sources"]["community_search_url"] = search_var.get().strip()
         config.save(cfg)
         messagebox.showinfo("Saved", "Settings saved. They take effect on the next check.")

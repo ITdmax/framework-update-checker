@@ -27,6 +27,12 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+; Let the app's built-in self-updater run this installer silently: detect the
+; running app via this mutex (the app creates one with the same name), close it,
+; replace the files, and relaunch it. AppMutex must match _claim_mutex() in app.py.
+AppMutex=FrameworkUpdateCheckerMutex
+CloseApplications=yes
+RestartApplications=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"

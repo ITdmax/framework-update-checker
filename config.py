@@ -13,6 +13,10 @@ log = logging.getLogger("fuc.config")
 
 APP_NAME = "FrameworkUpdateChecker"
 
+# Bump this when you cut a new release, and keep it in sync with MyAppVersion in
+# installer.iss and the git tag you push (e.g. tag "v1.0.1" -> APP_VERSION "1.0.1").
+APP_VERSION = "1.0.0"
+
 # Automation levels (exposed in the Settings window):
 #   "notify"                    -> only tell me; never download or install
 #   "auto_drivers_confirm_bios" -> trigger driver/Windows Update scans automatically,
@@ -34,6 +38,12 @@ DEFAULTS = {
     "require_ac_power": True,        # safety guard for any install action
     "min_battery_percent": 30,      # don't install below this even on battery
     "notify_when_up_to_date": False,  # if True, a manual "Check now" confirms even when nothing's new
+    # --- self-update (the app updating itself from its own GitHub releases) ---
+    # "owner/repo" of where THIS app is published, e.g. "jdoe/framework-update-checker".
+    # Leave blank to disable self-update entirely.
+    "app_repo": "",
+    "auto_update": True,            # check GitHub for a newer version of this app
+    "auto_install_app_updates": False,  # if True, install app updates silently with no prompt
     # Optional: a direct URL to the official Windows BIOS updater. The Framework KB
     # page is JS-rendered so this can't be discovered automatically. Leave blank to
     # have the app simply open the release page for you instead of downloading.

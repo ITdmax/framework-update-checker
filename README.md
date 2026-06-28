@@ -61,9 +61,20 @@ This one-click setup assumes Python is installed (the `py` launcher). For a buil
 that needs **no Python at all**, see "build an installer" below.
 
 ### Settings
-Right-click the tray icon → **Settings**. Toggle which updates to watch
-(BIOS / drivers / keyboard), auto-download, the check interval, and beta vs
+Right-click (or left-click) the tray icon → **Settings**. Toggle which updates to
+watch (BIOS / drivers / keyboard), auto-download, the check interval, and beta vs
 stable. Changes take effect on the next check — hit *Check now* to apply now.
+
+### Updating the app itself
+The app can update *itself* from its own GitHub releases instead of you
+reinstalling. In **Settings**, set **GitHub repo (owner/name)** to where you
+published it (e.g. `yourname/framework-update-checker`). Then on each check it
+asks GitHub for a newer release, downloads the new `FrameworkUpdateCheckerSetup.exe`,
+and notifies you — the tray shows **Update app to vX now**, which installs it
+silently and relaunches (the installer is set to close and restart the running
+app). Tick **Install app updates silently** for fully hands-off updates. This
+applies to the installed `.exe` build; running from source just notifies and
+links the release. Self-update stays off until you set the repo.
 
 Config, logs, and downloaded installers live under:
 `%APPDATA%\FrameworkUpdateChecker\` and `%LOCALAPPDATA%\FrameworkUpdateChecker\downloads\`

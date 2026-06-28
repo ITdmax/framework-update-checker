@@ -286,3 +286,36 @@ def resolve_forum_download(thread_url: str):
         s = _SHA256_RE.search(html)
         sha = s.group(0) if s else None
     return url, sha
+
+
+# --- app self-update (this program's own GitHub releases) ----------------
+
+def fetch_latest_app_release(repo: str):
+    """Latest release of THIS app from its GitHub repo ('owner/repo').
+    Returns {'version','url','download'} (download = the setup .exe asset URL),
+    or None. Never raises."""
+    repo = (repo or "").strip().strip("/")
+    if not repo or "/" not in repo:
+        return None
+    api = "https://api.github.com/repos/{}/releases/latest".format(repo)
+    try:
+        data = _get_json(api, accept="application/vnd.github+json")
+    except Exception as e:
+        log.info("App update check failed (%s): %s", repo, e)
+        return None
+    if not isinstance(data, dict):
+        return None
+    tag = data.get("tag_name") or data.get("name")
+    if not tag:
+        return None
+    # Prefer a "setup" .exe asset; fall back to any .exe.
+    dl = None
+    for a in data.get("assets") or []:
+        n = (a.get("name") or "").lower()
+        if n.endswith(".exe"):
+            url = a.get("browser_download_url")
+            if "setup" in n:
+                dl = url
+                break
+            dl = dl or url
+    return {"version": tag, "url": data.get("html_url"), "download": dl}

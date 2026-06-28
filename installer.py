@@ -169,3 +169,29 @@ def set_run_at_startup(enable: bool, app_script: str) -> bool:
     except Exception as e:
         log.warning("Could not set run-at-startup=%s: %s", enable, e)
         return False
+
+
+def file_uri(path: str) -> str | None:
+    """A file:/// URI for a local file, for use as a toast button target."""
+    try:
+        return pathlib.Path(path).resolve().as_uri()
+    except Exception:
+        return None
+
+
+def run_app_update(setup_path: str) -> bool:
+    """Update the app in place by running its downloaded installer silently.
+    The installer (see installer.iss: CloseApplications/RestartApplications +
+    AppMutex) closes this running app, replaces it, and relaunches it. Returns
+    True if the installer was launched."""
+    try:
+        if os.name != "nt":
+            log.info("(non-Windows) would run app updater: %s", setup_path)
+            return False
+        args = [setup_path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
+                "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"]
+        subprocess.Popen(args, creationflags=_CREATE_NO_WINDOW)
+        return True
+    except Exception as e:
+        log.warning("Could not launch app updater: %s", e)
+        return False

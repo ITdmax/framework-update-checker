@@ -70,3 +70,17 @@ unsigned app — click **More info → Run anyway**. Removing that warning entir
 requires a paid code-signing certificate, which isn't worth it for a personal
 tool. (If you ever do want it signed, the `.iss` has a `SignTool` hook Inno can
 use.)
+
+## Cutting a new release (so the in-app updater sees it)
+
+The app compares its built-in version to the latest GitHub release tag. For an
+update to be detected and offered, bump all three together:
+
+1. `APP_VERSION` in **config.py** (e.g. `"1.0.1"`)
+2. `MyAppVersion` in **installer.iss** (e.g. `1.0.1`)
+3. The git tag you push: `v1.0.1`
+
+Push the tag (`git tag v1.0.1 && git push origin v1.0.1`, or draft a release in
+the GitHub UI). The workflow builds `FrameworkUpdateCheckerSetup.exe` and attaches
+it to the release. Installed copies that have your repo set in Settings will then
+see `v1.0.1 > 1.0.0`, download it, and offer **Update app now**.

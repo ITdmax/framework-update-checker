@@ -75,17 +75,39 @@ def _now():
     return datetime.now().isoformat(timespec="seconds")
 
 
+# Win32 mouse-up message codes (stable across Windows versions).
+_WM_LBUTTONUP = 0x0202
+_WM_RBUTTONUP = 0x0205
+
+
+def _build_icon(title, image, menu):
+    """Create the tray icon. On Windows, subclass so a LEFT click opens the
+    context menu too -- pystray normally opens it only on right click."""
+    if os.name == "nt" and hasattr(pystray.Icon, "_on_notify"):
+        class _ClickableIcon(pystray.Icon):
+            def _on_notify(self, wparam, lparam):
+                # Remap left-button-up to right-button-up so either click pops
+                # the menu (left-click otherwise just triggers the default item).
+                if lparam == _WM_LBUTTONUP and getattr(self, "_menu_handle", None):
+                    lparam = _WM_RBUTTONUP
+                return super()._on_notify(wparam, lparam)
+        return _ClickableIcon("framework_update_checker", image, title, menu=menu)
+    return pystray.Icon("framework_update_checker", image, title, menu=menu)
+
+
+
 class App:
     def __init__(self):
         self.cfg = config.load()
         # ready[kind] is None, or a dict with version/url/ident and (once
         # downloaded) 'file' = the local installer path on disk.
         self.ready = {k: None for k in KINDS}
+        self.app_update = None       # newer version of THIS app, or None
         self.last_status = "starting up"
         self._stop = threading.Event()
         self._wake = threading.Event()
-        self.icon = pystray.Icon("framework_update_checker", _make_icon_image(),
-                                 "Framework Update Checker", menu=self._build_menu())
+        self.icon = _build_icon("Framework Update Checker",
+                                _make_icon_image(), self._build_menu())
 
     # --- state helpers ---------------------------------------------------
     def _set_state(self, **kwargs):
@@ -128,13 +150,31 @@ class App:
             return pystray.MenuItem(text, lambda _ic=None, _it=None: self._install(kind),
                                     visible=visible)
 
+        def app_update_item():
+            def text(_i):
+                e = self.app_update
+                if e and e.get("file") and getattr(sys, "frozen", False):
+                    return f"Update app to {e['version']} now"
+                if e:
+                    return f"App update {e['version']} - open release"
+                return "App is up to date"
+
+            def visible(_i):
+                return self.app_update is not None
+
+            return pystray.MenuItem(
+                text, lambda _ic=None, _it=None: self._install_app_update(), visible=visible)
+
         return pystray.Menu(
+            pystray.MenuItem(lambda _i: f"Framework Update Checker v{config.APP_VERSION}",
+                             None, enabled=False),
             pystray.MenuItem(status_text, None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Check now", lambda _i=None, _it=None: self._wake.set()),
             make_install_item("BIOS"),
             make_install_item("Driver bundle"),
             make_install_item("Keyboard firmware"),
+            app_update_item(),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Open Framework BIOS page", self._on_open_kb),
             pystray.MenuItem("Create desktop shortcut", self._on_make_shortcut),
@@ -169,6 +209,22 @@ class App:
             installer.run_installer(f)
         else:
             installer.open_url(r.get("url"))
+        self.icon.update_menu()
+
+    def _install_app_update(self):
+        e = self.app_update
+        if not e:
+            return
+        actioned = dict(self.cfg["state"].get("actioned", {}))
+        actioned["app"] = e["version"]
+        self._set_state(actioned=actioned)
+        f = e.get("file")
+        if f and os.path.exists(f) and getattr(sys, "frozen", False):
+            # Silent in-place update: the installer closes us, replaces files,
+            # and relaunches (configured in installer.iss).
+            installer.run_app_update(f)
+        else:
+            installer.open_url(e.get("url"))
         self.icon.update_menu()
 
     def _on_settings(self, _i=None, _it=None):
@@ -210,6 +266,10 @@ class App:
             self._check_drivers(manual)
         if self.cfg.get("watch_keyboard", True):
             self._check_keyboard(manual)
+        try:
+            self._check_app_update(manual)
+        except Exception as e:
+            log.warning("App update check error: %s", e)
         n = self._pending_count()
         self.last_status = (f"{n} update(s) downloaded, ready to install" if n
                             else "up to date")
@@ -232,11 +292,19 @@ class App:
 
     def _announce(self, kind, entry):
         v = entry["version"]
-        if entry.get("file"):
+        f = entry.get("file")
+        if f:
+            uri = installer.file_uri(f)
+            actions = []
+            if uri:
+                actions.append(("Install now", uri))
+            if entry.get("url"):
+                actions.append(("Release notes", entry["url"]))
             notifier.notify(
                 f"{kind} {v} ready to install",
-                f"Downloaded from Framework. Tray icon - Install {kind} {v} now, or later.",
-                url=entry.get("url"), button_label="Release notes",
+                "Downloaded from Framework. Click Install now, or use the tray icon later.",
+                launch=uri or entry.get("url"),
+                actions=actions,
             )
         else:
             notifier.notify(
@@ -290,6 +358,58 @@ class App:
         if manual or self._unacted("Keyboard firmware", ident):
             self._announce("Keyboard firmware", self.ready["Keyboard firmware"])
 
+    # --- app self-update -------------------------------------------------
+    def _check_app_update(self, manual):
+        cfg = self.cfg
+        if not cfg.get("auto_update", True) or not cfg.get("app_repo", "").strip():
+            self.app_update = None
+            return
+        latest = checker.fetch_latest_app_release(cfg["app_repo"])
+        if not latest:
+            return
+        tag = latest["version"]
+        if checker.is_newer(tag, config.APP_VERSION) is not True:
+            self.app_update = None
+            return
+        local = None
+        dl = latest.get("download")
+        if dl:
+            expected = installer.expected_path(dl)
+            if os.path.exists(expected):
+                local = expected
+            elif cfg.get("auto_download", True):
+                local = installer.download(dl)
+        self.app_update = {"version": tag, "url": latest.get("url"), "file": local}
+        # Fully unattended update (opt-in), exe build only.
+        if (local and cfg.get("auto_install_app_updates", False)
+                and getattr(sys, "frozen", False)):
+            log.info("Auto-installing app update %s", tag)
+            installer.run_app_update(local)
+            return
+        if manual or self._unacted("app", tag):
+            self._announce_app(self.app_update)
+
+    def _announce_app(self, entry):
+        v = entry["version"]
+        f = entry.get("file")
+        if f and getattr(sys, "frozen", False):
+            uri = installer.file_uri(f)
+            actions = [("Update now", uri)] if uri else []
+            if entry.get("url"):
+                actions.append(("Release notes", entry["url"]))
+            notifier.notify(
+                f"App update {v} ready",
+                "A new version of Framework Update Checker is ready. Click Update now, or use the tray icon for a silent update.",
+                launch=entry.get("url") or uri,
+                actions=actions,
+            )
+        else:
+            notifier.notify(
+                f"App update {v} available",
+                "A new version is on GitHub - click to open the release.",
+                url=entry.get("url"), button_label="Open release",
+            )
+
     # --- scheduler loop --------------------------------------------------
     def _loop(self):
         if self._wake.wait(timeout=8):
@@ -315,10 +435,28 @@ class App:
         self.icon.run(setup=self._on_ready)
 
 
+_MUTEX_HANDLE = None
+
+
+def _claim_mutex():
+    """Create a named mutex matching installer.iss AppMutex, so the installer
+    can detect, close, and relaunch this app during a silent self-update."""
+    global _MUTEX_HANDLE
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        _MUTEX_HANDLE = ctypes.windll.kernel32.CreateMutexW(None, False,
+                                                            "FrameworkUpdateCheckerMutex")
+    except Exception as e:
+        log.debug("Could not create mutex: %s", e)
+
+
 def main():
     if "--settings" in sys.argv:
         settings_gui.main()
     else:
+        _claim_mutex()
         App().run()
 
 
