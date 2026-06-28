@@ -10,6 +10,12 @@ on:
     tags: [ "v*" ]
   workflow_dispatch:
 
+# The release step needs write access to create a GitHub Release and upload the
+# installer. New repos default the workflow token to read-only, which causes a
+# 403 "Resource not accessible by integration"; this fixes that.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
