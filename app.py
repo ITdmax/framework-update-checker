@@ -135,10 +135,16 @@ class App:
         def status_text(_i):
             return f"Status: {self.last_status}"
 
+        def _is_installed(kind):
+            r = self.ready.get(kind)
+            return bool(r) and self.cfg["state"].get("actioned", {}).get(kind) == r.get("ident", "")
+
         def make_install_item(kind):
             def text(_i):
                 r = self.ready.get(kind)
                 if r and r.get("file"):
+                    if _is_installed(kind):
+                        return f"{kind} {r['version']} - installed \u2713 (re-run)"
                     return f"Install {kind} {r['version']} now"
                 if r:
                     return f"{kind} {r['version']} - open page"
@@ -148,6 +154,19 @@ class App:
                 return self.cfg.get(self._watching(kind), True)
 
             return pystray.MenuItem(text, lambda _ic=None, _it=None: self._install(kind),
+                                    visible=visible)
+
+        def make_mark_item(kind):
+            # Drivers/keyboard can't be auto-detected; let the user mark them done
+            # if they installed via the popup or by hand. Hidden once handled.
+            def visible(_i):
+                if not self.cfg.get(self._watching(kind), True):
+                    return False
+                r = self.ready.get(kind)
+                return bool(r and r.get("file")) and not _is_installed(kind)
+
+            return pystray.MenuItem(f"Mark {kind} as installed",
+                                    lambda _ic=None, _it=None: self._mark_installed(kind),
                                     visible=visible)
 
         def app_update_item():
@@ -173,10 +192,13 @@ class App:
             pystray.MenuItem("Check now", lambda _i=None, _it=None: self._wake.set()),
             make_install_item("BIOS"),
             make_install_item("Driver bundle"),
+            make_mark_item("Driver bundle"),
             make_install_item("Keyboard firmware"),
+            make_mark_item("Keyboard firmware"),
             app_update_item(),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Open Framework BIOS page", self._on_open_kb),
+            pystray.MenuItem("View project on GitHub", self._on_open_github),
             pystray.MenuItem("Create desktop shortcut", self._on_make_shortcut),
             pystray.MenuItem("Settings...", self._on_settings),
             pystray.MenuItem("Pause checks", self._on_toggle_pause,
@@ -190,6 +212,11 @@ class App:
     # --- menu actions ----------------------------------------------------
     def _on_open_kb(self, _i=None, _it=None):
         installer.open_url(self.cfg["sources"].get("kb_url"))
+
+    def _on_open_github(self, _i=None, _it=None):
+        repo = (self.cfg.get("app_repo") or "").strip().strip("/")
+        url = f"https://github.com/{repo}" if repo else "https://github.com"
+        installer.open_url(url)
 
     def _on_make_shortcut(self, _i=None, _it=None):
         ok = installer.make_desktop_shortcut(APP_SCRIPT)
@@ -238,7 +265,7 @@ class App:
 
         def run_and_reload():
             try:
-                subprocess.run(cmd, timeout=600, creationflags=_CREATE_NO_WINDOW)
+                subprocess.run(cmd, creationflags=_CREATE_NO_WINDOW)
             except Exception as e:
                 log.warning("Settings window error: %s", e)
             self._reload_config()
@@ -293,6 +320,29 @@ class App:
         entry["file"] = local
         self.ready[kind] = entry
 
+    def _maybe_announce(self, kind, entry, ident, manual):
+        """Notify once per new version (not on every check). A manual check always
+        notifies so the user gets feedback."""
+        announced = self.cfg["state"].get("announced", {})
+        newly = announced.get(kind) != ident
+        if manual or (newly and self._unacted(kind, ident)):
+            self._announce(kind, entry)
+        if newly:
+            a = dict(announced)
+            a[kind] = ident
+            self._set_state(announced=a)
+
+    def _mark_installed(self, kind):
+        """Record that the user handled this update (for drivers/keyboard, which
+        can't be auto-detected) without launching anything."""
+        r = self.ready.get(kind)
+        if not r:
+            return
+        a = dict(self.cfg["state"].get("actioned", {}))
+        a[kind] = r.get("ident", r.get("version", ""))
+        self._set_state(actioned=a)
+        self.icon.update_menu()
+
     def _announce(self, kind, entry):
         v = entry["version"]
         f = entry.get("file")
@@ -333,8 +383,7 @@ class App:
         if result is True:
             url, sha = checker.resolve_forum_download(latest["url"])
             self._obtain("BIOS", latest, latest["version"], url, sha)
-            if manual or self._unacted("BIOS", latest["version"]):
-                self._announce("BIOS", self.ready["BIOS"])
+            self._maybe_announce("BIOS", self.ready["BIOS"], latest["version"], manual)
         else:
             self.ready["BIOS"] = None
             if manual and result is False and cfg.get("notify_when_up_to_date", False):
@@ -348,8 +397,7 @@ class App:
         ident = "{} {}".format(latest["version"], latest.get("date", "")).strip()
         url, sha = checker.resolve_forum_download(latest["url"])
         self._obtain("Driver bundle", latest, ident, url, sha)
-        if manual or self._unacted("Driver bundle", ident):
-            self._announce("Driver bundle", self.ready["Driver bundle"])
+        self._maybe_announce("Driver bundle", self.ready["Driver bundle"], ident, manual)
 
     def _check_keyboard(self, manual):
         cfg = self.cfg
@@ -358,8 +406,7 @@ class App:
             return
         ident = latest["version"]
         self._obtain("Keyboard firmware", latest, ident, latest.get("download"))
-        if manual or self._unacted("Keyboard firmware", ident):
-            self._announce("Keyboard firmware", self.ready["Keyboard firmware"])
+        self._maybe_announce("Keyboard firmware", self.ready["Keyboard firmware"], ident, manual)
 
     # --- app self-update -------------------------------------------------
     def _check_app_update(self, manual):

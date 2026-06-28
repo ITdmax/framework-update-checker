@@ -15,7 +15,7 @@ APP_NAME = "FrameworkUpdateChecker"
 
 # Bump this when you cut a new release, and keep it in sync with MyAppVersion in
 # installer.iss and the git tag you push (e.g. tag "v1.0.1" -> APP_VERSION "1.0.1").
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 # Automation levels (exposed in the Settings window):
 #   "notify"                    -> only tell me; never download or install
@@ -87,9 +87,12 @@ DEFAULTS = {
         "last_check_iso": "",
         "installed_version_cache": "",
         "paused": False,
-        # version per update type the user has clicked "Install" on, so the app
-        # stops reminding about it until a newer one appears.
+        # version per update type the user has clicked "Install" / "Mark installed"
+        # on, so the app stops reminding about it until a newer one appears.
         "actioned": {},
+        # version per update type we've already shown a notification for, so we
+        # notify once per new version instead of on every check.
+        "announced": {},
     },
 }
 
