@@ -188,8 +188,7 @@ def run_app_update(setup_path: str) -> bool:
         if os.name != "nt":
             log.info("(non-Windows) would run app updater: %s", setup_path)
             return False
-        args = [setup_path, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
-                "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"]
+        args = [setup_path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]
         subprocess.Popen(args, creationflags=_CREATE_NO_WINDOW)
         return True
     except Exception as e:

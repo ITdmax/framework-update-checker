@@ -103,6 +103,7 @@ class App:
         # downloaded) 'file' = the local installer path on disk.
         self.ready = {k: None for k in KINDS}
         self.app_update = None       # newer version of THIS app, or None
+        self._update_launched = False  # guard: only kick off a self-update once
         self.last_status = "starting up"
         self._stop = threading.Event()
         self._wake = threading.Event()
@@ -224,6 +225,27 @@ class App:
                         "Desktop shortcut created." if ok
                         else "Couldn't create the shortcut (see checker.log).")
 
+    def _launch_update_and_quit(self, path):
+        """Start the app's own installer, then quit so it can replace our files.
+        The installer relaunches the app when it finishes (installer.iss [Run])."""
+        if self._update_launched:
+            return
+        if not installer.run_app_update(path):
+            return
+        self._update_launched = True
+        self.last_status = "updating - the installer will relaunch the app"
+        self.icon.update_menu()
+
+        def _bye():
+            import time
+            time.sleep(2)  # let the installer process spin up first
+            self._stop.set()
+            try:
+                self.icon.stop()
+            except Exception:
+                pass
+        threading.Thread(target=_bye, daemon=True).start()
+
     def _install(self, kind):
         r = self.ready.get(kind)
         if not r:
@@ -250,9 +272,8 @@ class App:
         self._set_state(actioned=actioned)
         f = e.get("file")
         if f and os.path.exists(f) and getattr(sys, "frozen", False):
-            # Silent in-place update: the installer closes us, replaces files,
-            # and relaunches (configured in installer.iss).
-            installer.run_app_update(f)
+            # Launch the installer and quit so it can replace us, then relaunch.
+            self._launch_update_and_quit(f)
         else:
             installer.open_url(e.get("url"))
         self.icon.update_menu()
@@ -436,7 +457,7 @@ class App:
         if (local and cfg.get("auto_install_app_updates", False)
                 and getattr(sys, "frozen", False)):
             log.info("Auto-installing app update %s", tag)
-            installer.run_app_update(local)
+            self._launch_update_and_quit(local)
             return
         if manual or self._unacted("app", tag):
             self._announce_app(self.app_update)
