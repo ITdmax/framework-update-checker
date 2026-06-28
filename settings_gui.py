@@ -67,6 +67,22 @@ def main():
     ).grid(row=row, column=0, columnspan=2, sticky="w", **pad)
     row += 1
 
+    # Which input modules the user has -> keyboard "Install" runs only these flashers.
+    KB_CHOICES = [("ANSI keyboard", "ansi"), ("ISO keyboard", "iso"),
+                  ("JIS keyboard", "jis"), ("Numpad", "numpad"), ("Macropad", "macropad")]
+    have = set(cfg.get("keyboard_modules", []) or [])
+    kb_vars = {}
+    ttk.Label(frm, text="    My keyboard modules:", foreground="#555").grid(
+        row=row, column=0, sticky="w", padx=10)
+    kb_box = ttk.Frame(frm)
+    kb_box.grid(row=row, column=1, sticky="w", padx=10, pady=2)
+    for i, (label, token) in enumerate(KB_CHOICES):
+        v = tk.BooleanVar(value=token in have)
+        kb_vars[token] = v
+        ttk.Checkbutton(kb_box, text=label, variable=v).grid(
+            row=i // 3, column=i % 3, sticky="w", padx=(0, 10))
+    row += 1
+
     uptodate_var = tk.BooleanVar(value=cfg["notify_when_up_to_date"])
     ttk.Checkbutton(
         frm, text="On a manual check, tell me even when up to date", variable=uptodate_var
@@ -124,6 +140,7 @@ def main():
         cfg["watch_bios"] = bool(bios_var.get())
         cfg["watch_drivers"] = bool(drivers_var.get())
         cfg["watch_keyboard"] = bool(keyboard_var.get())
+        cfg["keyboard_modules"] = [tok for tok, v in kb_vars.items() if v.get()]
         cfg["notify_when_up_to_date"] = bool(uptodate_var.get())
         cfg["app_repo"] = repo_var.get().strip()
         cfg["auto_update"] = bool(autoupd_var.get())

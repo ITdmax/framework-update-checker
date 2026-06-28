@@ -205,10 +205,13 @@ class App:
         actioned[kind] = r.get("ident", r.get("version", ""))
         self._set_state(actioned=actioned)
         f = r.get("file")
-        if f and os.path.exists(f):
-            installer.run_installer(f)
-        else:
+        if not (f and os.path.exists(f)):
             installer.open_url(r.get("url"))
+        elif kind == "Keyboard firmware" and f.lower().endswith(".zip"):
+            # Run only the flashers for the modules the user selected in Settings.
+            installer.run_keyboard_flashers(f, self.cfg.get("keyboard_modules", []))
+        else:
+            installer.run_installer(f)
         self.icon.update_menu()
 
     def _install_app_update(self):

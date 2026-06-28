@@ -15,7 +15,7 @@ APP_NAME = "FrameworkUpdateChecker"
 
 # Bump this when you cut a new release, and keep it in sync with MyAppVersion in
 # installer.iss and the git tag you push (e.g. tag "v1.0.1" -> APP_VERSION "1.0.1").
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 # Automation levels (exposed in the Settings window):
 #   "notify"                    -> only tell me; never download or install
@@ -34,6 +34,9 @@ DEFAULTS = {
     "watch_bios": True,
     "watch_drivers": True,
     "watch_keyboard": True,         # keyboard / input-module firmware (GitHub releases)
+    # Which input modules you physically have, so the keyboard "Install" runs only
+    # the matching flashers from the firmware zip. Tokens: ansi, iso, jis, numpad, macropad.
+    "keyboard_modules": [],
     "auto_download": True,          # auto-download the installer when an update is found
     "require_ac_power": True,        # safety guard for any install action
     "min_battery_percent": 30,      # don't install below this even on battery
@@ -41,7 +44,7 @@ DEFAULTS = {
     # --- self-update (the app updating itself from its own GitHub releases) ---
     # "owner/repo" of where THIS app is published, e.g. "jdoe/framework-update-checker".
     # Leave blank to disable self-update entirely.
-    "app_repo": "",
+    "app_repo": "ITdmax/framework-update-checker",
     "auto_update": True,            # check GitHub for a newer version of this app
     "auto_install_app_updates": False,  # if True, install app updates silently with no prompt
     # Optional: a direct URL to the official Windows BIOS updater. The Framework KB

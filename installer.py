@@ -195,3 +195,44 @@ def run_app_update(setup_path: str) -> bool:
     except Exception as e:
         log.warning("Could not launch app updater: %s", e)
         return False
+
+
+def run_keyboard_flashers(zip_path: str, modules) -> int:
+    """Extract the keyboard firmware zip and launch the flasher .exe(s) matching
+    the input modules the user has (e.g. ['ansi','numpad']). If none are selected
+    or matched, open the extracted folder so they can choose. Returns how many
+    flashers were launched."""
+    import zipfile
+    import re
+    try:
+        zp = pathlib.Path(zip_path)
+        dest = zp.parent / (zp.stem + "_fw")
+        if not dest.exists():
+            with zipfile.ZipFile(zp) as z:
+                z.extractall(dest)
+        exes = list(dest.rglob("*.exe"))
+        tokens = [str(m).lower() for m in (modules or [])]
+        ran = 0
+        for token in tokens:
+            for p in exes:
+                parts = re.split(r"[^a-z0-9]+", p.name.lower())
+                if token in parts:
+                    try:
+                        if os.name == "nt":
+                            os.startfile(str(p))  # noqa: S606
+                        ran += 1
+                    except Exception as e:
+                        log.warning("Flasher launch failed (%s): %s", p.name, e)
+                    break
+        if ran == 0 and os.name == "nt":
+            os.startfile(str(dest))  # nothing selected/matched -> let them pick
+        log.info("Keyboard flashers launched: %d (modules=%s)", ran, tokens)
+        return ran
+    except Exception as e:
+        log.warning("Keyboard flashers failed: %s", e)
+        try:
+            if os.name == "nt":
+                os.startfile(zip_path)  # noqa: S606
+        except Exception:
+            pass
+        return 0
