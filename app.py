@@ -238,7 +238,7 @@ class App:
 
         def _bye():
             import time
-            time.sleep(2)  # let the installer process spin up first
+            time.sleep(1)  # let the helper process start; it waits for us to exit
             self._stop.set()
             try:
                 self.icon.stop()

@@ -190,16 +190,39 @@ def file_uri(path: str) -> str | None:
 
 
 def run_app_update(setup_path: str) -> bool:
-    """Update the app in place by running its downloaded installer silently.
-    The installer (see installer.iss: CloseApplications/RestartApplications +
-    AppMutex) closes this running app, replaces it, and relaunches it. Returns
-    True if the installer was launched."""
+    """Replace the app in place. A running program can't reliably overwrite its
+    own files, so rather than racing to close before the installer's copy step
+    (which makes Inno roll back on a locked file), we hand off to a detached
+    PowerShell helper that: (1) waits for THIS process to exit, (2) runs the
+    installer silently, (3) relaunches the freshly installed app. Returns True if
+    the helper was launched -- after which the caller should quit the app."""
     try:
         if os.name != "nt":
             log.info("(non-Windows) would run app updater: %s", setup_path)
             return False
-        args = [setup_path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]
-        subprocess.Popen(args, creationflags=_CREATE_NO_WINDOW)
+        app_exe = sys.executable
+        pid = os.getpid()
+        setup_q = setup_path.replace("'", "''")
+        app_q = app_exe.replace("'", "''")
+        ps = (
+            "$ErrorActionPreference='SilentlyContinue';"
+            "try {{ Wait-Process -Id {pid} -Timeout 90 }} catch {{}};"
+            "Start-Sleep -Milliseconds 800;"
+            "Start-Process -FilePath '{setup}' -ArgumentList "
+            "'/SILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait;"
+            "Start-Sleep -Milliseconds 800;"
+            "Start-Process -FilePath '{app}'"
+        ).format(pid=pid, setup=setup_q, app=app_q)
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-NonInteractive",
+             "-WindowStyle", "Hidden", "-Command", ps],
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
+        log.info("Launched update helper; it will install after this app exits: %s",
+                 setup_path)
         return True
     except Exception as e:
         log.warning("Could not launch app updater: %s", e)
