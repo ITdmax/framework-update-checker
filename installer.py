@@ -29,8 +29,18 @@ def staging_dir() -> pathlib.Path:
 
 
 def expected_path(url: str) -> str:
-    """Where a given download URL's file would live locally."""
-    name = (url or "").split("/")[-1].split("?")[0] or "framework_update_download"
+    """Where a given download URL's file would live locally. The URL segment just
+    before the filename (for a GitHub asset that's the release tag, e.g. 'v1.0.8')
+    is folded into the local name, so different versions never share one filename
+    and get wrongly reused as a stale cache. This is what made the app updater keep
+    re-running an old installer no matter which version the release reported."""
+    clean = (url or "").split("?")[0]
+    parts = [p for p in clean.split("/") if p]
+    name = parts[-1] if parts else "framework_update_download"
+    parent = parts[-2] if len(parts) >= 2 else ""
+    if parent and parent.lower() not in ("download", "releases", "files", "latest"):
+        safe = "".join(c if (c.isalnum() or c in "._-") else "_" for c in parent)
+        name = "{}_{}".format(safe, name)
     return str(staging_dir() / name)
 
 
