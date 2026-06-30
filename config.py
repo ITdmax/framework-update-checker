@@ -15,7 +15,7 @@ APP_NAME = "FrameworkUpdateChecker"
 
 # Bump this when you cut a new release, and keep it in sync with MyAppVersion in
 # installer.iss and the git tag you push (e.g. tag "v1.0.1" -> APP_VERSION "1.0.1").
-APP_VERSION = "1.0.9"
+APP_VERSION = "1.0.10"
 
 # Automation levels (exposed in the Settings window):
 #   "notify"                    -> only tell me; never download or install
