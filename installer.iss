@@ -7,7 +7,7 @@
 ; at sign-in, and registers an uninstaller in Add/Remove Programs.
 
 #define MyAppName "Framework Update Checker"
-#define MyAppVersion "1.0.7"
+#define MyAppVersion "1.0.8"
 #define MyAppPublisher "James"
 #define MyAppExeName "FrameworkUpdateChecker.exe"
 
