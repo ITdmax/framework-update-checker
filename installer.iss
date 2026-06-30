@@ -7,7 +7,7 @@
 ; at sign-in, and registers an uninstaller in Add/Remove Programs.
 
 #define MyAppName "Framework Update Checker"
-#define MyAppVersion "1.0.6"
+#define MyAppVersion "1.0.7"
 #define MyAppPublisher "James"
 #define MyAppExeName "FrameworkUpdateChecker.exe"
 
@@ -44,7 +44,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Name: "{userstartup}\FrameworkUpdateChecker"; Filename: "{app}\{#MyAppExeName}"; Tasks: startup
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now"; Flags: nowait postinstall
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName} now"; Flags: nowait
 
 [UninstallDelete]
 ; Clean up the startup shortcut on uninstall if it's still there.
