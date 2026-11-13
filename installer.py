@@ -193,8 +193,9 @@ def run_app_update(setup_path: str) -> bool:
     """Replace the app in place. A running program can't reliably overwrite its
     own files, so rather than racing to close before the installer's copy step
     (which makes Inno roll back on a locked file), we hand off to a detached
-    PowerShell helper that: (1) waits for THIS process to exit, (2) runs the
-    installer silently, (3) relaunches the freshly installed app. Returns True if
+    PowerShell helper that: (1) waits up to 30s for THIS process to exit, then
+    force-kills it if it's still there, (2) runs the installer silently, (3)
+    relaunches the freshly installed app. Returns True if
     the helper was launched -- after which the caller should quit the app."""
     try:
         if os.name != "nt":
@@ -206,11 +207,12 @@ def run_app_update(setup_path: str) -> bool:
         app_q = app_exe.replace("'", "''")
         ps = (
             "$ErrorActionPreference='SilentlyContinue';"
-            "try {{ Wait-Process -Id {pid} -Timeout 90 }} catch {{}};"
-            "Start-Sleep -Milliseconds 800;"
+            "try {{ Wait-Process -Id {pid} -Timeout 30 }} catch {{}};"
+            "Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue;"
+            "Start-Sleep -Milliseconds 1200;"
             "Start-Process -FilePath '{setup}' -ArgumentList "
             "'/SILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait;"
-            "Start-Sleep -Milliseconds 800;"
+            "Start-Sleep -Milliseconds 1200;"
             "Start-Process -FilePath '{app}'"
         ).format(pid=pid, setup=setup_q, app=app_q)
         DETACHED_PROCESS = 0x00000008

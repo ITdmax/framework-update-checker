@@ -13,7 +13,8 @@ out it **downloads the installer for you** and notifies you to install it:
 
 - **BIOS** — reads your installed version from Windows (`Win32_BIOS`) and compares
   it to the latest Framework release for *this exact model* (Laptop 16 / AI 300).
-- **Driver bundle** — watches Framework's forum for new Windows driver bundles.
+- **Driver bundle** — watches Framework's Resources page and forum for new
+  Windows driver bundles.
 - **Keyboard / input-module firmware** — watches Framework's QMK GitHub releases.
 
 When an update is found, it downloads the installer straight from Framework's CDN
@@ -26,10 +27,15 @@ Toggle each update type, the check interval, and auto-download in **Settings**.
 
 ### Why it works this way (the honest part)
 
-Framework has **no update API**. BIOS and driver releases are read from the
-community forum (the only public, machine-readable signal), and keyboard
-firmware from its GitHub releases. If the forum source is ever unreachable, the
-app opens the official page for you instead of guessing. The driver and keyboard
+Framework has **no update API**. Stable BIOS and driver releases are read from
+Framework's official [Resources page](https://resources.frame.work/downloads/laptop-16/amd-ryzen-ai-300-series/)
+for this model, which lists each download with its SHA256. Beta releases (and a
+backup for the Resources page) come from the community forum, but only from
+release threads posted by Framework's own team, since anyone can post a thread
+with a look-alike title. Installers are only ever downloaded from
+`downloads.frame.work`. Keyboard firmware comes from Framework's GitHub releases.
+If no source can be reached, the app opens the official page for you instead of
+guessing, and the tray status says which check couldn't run. The driver and keyboard
 checks flag *newly published* releases rather than comparing to what's installed
 — there's no reliable way to read the installed driver-bundle or keyboard
 firmware version on Windows, so the app tells you when something new is out and
@@ -92,12 +98,13 @@ and you'll have a double-click Desktop icon with no Python folder in sight.
 
 ## Troubleshooting
 
-- **"Couldn't reach the version source"** — check your internet, or update the
-  *forum search URL* in Settings. The app still works as a scheduled reminder.
+- **Tray status says "couldn't check …"** — that part of the check couldn't reach
+  its source (or, for "installed BIOS version", couldn't read it from Windows).
+  Check your internet; details are in `checker.log`. The app still works as a
+  scheduled reminder.
 - **No BIOS version detected** — make sure PowerShell runs
   `(Get-CimInstance Win32_BIOS).SMBIOSBIOSVersion` without error.
-- **Want beta releases counted?** — Settings → "Treat beta BIOS releases as
-  available".
+- **Want beta releases counted?** — Settings → "Include beta releases".
 - Everything is logged to `checker.log` if something looks off.
 
 ---

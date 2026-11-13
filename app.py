@@ -1,9 +1,9 @@
 """Framework Update Checker - tray app and scheduler.
 
-Checks Framework DIRECTLY on a schedule (their community forum for the BIOS and
-the Windows driver bundle; their QMK GitHub for keyboard firmware), AUTO-DOWNLOADS
-the installer from Framework's own CDN when something new is out, verifies it, and
-notifies you so you can install now or later. It never flashes firmware silently --
+Checks Framework DIRECTLY on a schedule (their Resources page and community forum
+for the BIOS and the Windows driver bundle; their QMK GitHub for keyboard
+firmware), AUTO-DOWNLOADS the installer from Framework's own CDN when something
+new is out, verifies it, and notifies you so you can install now or later. It never flashes firmware silently --
 you run the downloaded installer yourself.
 
 Launch by double-clicking "Framework Update Checker.pyw" (no console window), or
@@ -105,6 +105,7 @@ class App:
         self.app_update = None       # newer version of THIS app, or None
         self._update_launched = False  # guard: only kick off a self-update once
         self.last_status = "starting up"
+        self._problems = []          # sources that couldn't be checked this round
         self._stop = threading.Event()
         self._wake = threading.Event()
         self.icon = _build_icon("Framework Update Checker",
@@ -226,8 +227,8 @@ class App:
                         else "Couldn't create the shortcut (see checker.log).")
 
     def _launch_update_and_quit(self, path):
-        """Start the app's own installer, then quit so it can replace our files.
-        The installer relaunches the app when it finishes (installer.iss [Run])."""
+        """Hand off to the update helper, then quit so the installer can replace
+        our files. The helper relaunches the app when the install finishes."""
         if self._update_launched:
             return
         if not installer.run_app_update(path):
@@ -244,6 +245,12 @@ class App:
                 self.icon.stop()
             except Exception:
                 pass
+            # icon.stop() does not reliably terminate the tray app on Windows, and
+            # the installer can't overwrite files we still hold (that's what made
+            # it hang / roll back). We're about to be replaced, so a hard exit --
+            # no cleanup needed -- is the safe choice.
+            time.sleep(3)
+            os._exit(0)
         threading.Thread(target=_bye, daemon=True).start()
 
     def _install(self, kind):
@@ -310,6 +317,7 @@ class App:
 
     # --- core check ------------------------------------------------------
     def check_once(self, manual=False):
+        self._problems = []
         self._set_state(last_check_iso=_now())
         if self.cfg.get("watch_bios", True):
             self._check_bios(manual)
@@ -322,8 +330,13 @@ class App:
         except Exception as e:
             log.warning("App update check error: %s", e)
         n = self._pending_count()
-        self.last_status = (f"{n} update(s) downloaded, ready to install" if n
-                            else "up to date")
+        if n:
+            self.last_status = f"{n} update(s) downloaded, ready to install"
+        elif self._problems:
+            # Don't claim "up to date" when part of the check didn't happen.
+            self.last_status = "couldn't check " + ", ".join(self._problems)
+        else:
+            self.last_status = "up to date"
         self.icon.update_menu()
 
     def _obtain(self, kind, latest, ident, download_url, sha=None):
@@ -394,9 +407,11 @@ class App:
         installed = checker.get_installed_bios_version()
         if installed:
             self._set_state(installed_version_cache=installed)
+        if not installed:
+            self._problems.append("installed BIOS version")
         latest = checker.fetch_latest_bios(cfg)
         if latest is None:
-            self.last_status = "couldn't reach BIOS source"
+            self._problems.append("BIOS releases")
             if manual:
                 notifier.notify("Framework Update Checker",
                                 "Couldn't reach the BIOS source. Opening Framework's page.",
@@ -404,8 +419,8 @@ class App:
             return
         result = checker.is_newer(latest["version"], installed)
         if result is True:
-            url, sha = checker.resolve_forum_download(latest["url"])
-            self._obtain("BIOS", latest, latest["version"], url, sha)
+            self._obtain("BIOS", latest, latest["version"],
+                         latest.get("download"), latest.get("sha"))
             self._maybe_announce("BIOS", self.ready["BIOS"], latest["version"], manual)
         else:
             self.ready["BIOS"] = None
@@ -416,16 +431,17 @@ class App:
         cfg = self.cfg
         latest = checker.fetch_latest_driver_bundle(cfg)
         if not latest:
+            self._problems.append("drivers")
             return
         ident = "{} {}".format(latest["version"], latest.get("date", "")).strip()
-        url, sha = checker.resolve_forum_download(latest["url"])
-        self._obtain("Driver bundle", latest, ident, url, sha)
+        self._obtain("Driver bundle", latest, ident, latest.get("download"), latest.get("sha"))
         self._maybe_announce("Driver bundle", self.ready["Driver bundle"], ident, manual)
 
     def _check_keyboard(self, manual):
         cfg = self.cfg
         latest = checker.fetch_latest_keyboard_fw(cfg)
         if not latest:
+            self._problems.append("keyboard firmware")
             return
         ident = latest["version"]
         self._obtain("Keyboard firmware", latest, ident, latest.get("download"))
